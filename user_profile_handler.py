@@ -38,41 +38,35 @@ class PasswordFrame(Frame):
         #> id(widget): [original, holder]
         #> with this method, the whole class stays in plug-n-play state, for instance with Entry widget:
         #> if i'd like to add more Entryes, only have to do is make the widget (as always), run the bindEntry method and make a record in this.
+        self.has_data_block = False # to avoid redundance
         
-        bg_color = None
-        if "bg" in kwargs.keys(): bg_color = kwargs["bg"]
+        self.bg_color = None
+        if "bg" in kwargs.keys(): self.bg_color = kwargs["bg"]
 
         self.reminder_holder = StringVar(value=self._reminder)
         self.frame_changed_holder = IntVar()
         self.func_holder = StringVar(value=self._func_for_code)
 
-        self.changed_checkbutton = Checkbutton(self, variable=self.frame_changed_holder, bg=bg_color, highlightbackground=bg_color, state="disabled")
+        self.changed_checkbutton = Checkbutton(self, variable=self.frame_changed_holder, bg=self.bg_color, highlightbackground=self.bg_color, state="disabled")
         self.changed_checkbutton.bind("<Button-1>", lambda event: self.resetChanges())
         self.changed_checkbutton.grid(row=0, column=0, columnspan=2, sticky="e")
 
-        Label(self, text="Password reminder: ", bg=bg_color).grid(row=1, column=0, sticky="w", pady=3)
+        Label(self, text="Password reminder: ", bg=self.bg_color).grid(row=1, column=0, sticky="w", pady=3)
         self.reminder_entry = Entry(self, textvariable=self.reminder_holder, bd=0, state="disabled")
         self.bindEntry(self.reminder_entry)
         self.reminder_entry.grid(row=1, column=1, sticky="w", padx=3, pady=3)
         self._widget_holder_dict[id(self.reminder_entry)] = [self._reminder, self.reminder_holder]
 
-        Label(self, text="Current function: ", bg=bg_color).grid(row=2, column=0, sticky="w", pady=3)
+        Label(self, text="Current function: ", bg=self.bg_color).grid(row=2, column=0, sticky="w", pady=3)
         self.func_dropdown = OptionMenu(self, self.func_holder, *self.root_commands.keys(), command=self.funcCommand)
-        self.func_dropdown.config(bg=bg_color, bd=1, highlightbackground=bg_color, state="disabled")
+        self.func_dropdown.config(bg=self.bg_color, bd=1, highlightbackground=self.bg_color, state="disabled")
         self.func_dropdown.bind("<Button-1>", lambda event: self.enableWidget(self.func_dropdown))
         self.func_dropdown.grid(row=2, column=1, sticky="w", padx=3, pady=3)
         self._widget_holder_dict[id(self.func_dropdown)] = [self._func_for_code, self.func_holder]
         
         if self._data_for_code is not None:
-            self.data_holder = StringVar(value=self._data_for_code)
+            self.createDataBlock()
 
-            Label(self, text="Data: ", bg=bg_color).grid(row=3, column=0, sticky="w", pady=3)
-            self.data_entry = Entry(self, textvariable=self.data_holder, bd=0, state="disabled")
-            self.bindEntry(self.data_entry)
-            self.data_entry.grid(row=3, column=1, sticky="w", padx=3, pady=3)
-            self._widget_holder_dict[id(self.data_entry)] = [self._data_for_code, self.data_holder]
-
-    
     def getFunc(self) -> tuple:
         func = self.root_easy_db.sendCommand(f"SELECT func, data FROM specials WHERE id={get_safe_data(self._user_id)} AND passwd_id={self._passwd_id}")[0]
         return func
@@ -81,8 +75,31 @@ class PasswordFrame(Frame):
         widget.bind("<KeyRelease>", lambda event: self.changeInEntry(id(widget)))
         widget.bind("<Return>", lambda event: self.saveChanges()) 
         widget.bind("<Button-1>", lambda event: self.enableWidget(widget))
-        widget.bind("<FocusOut>", lambda event: self.entryLeaveFocus())
-    
+        widget.bind("<FocusOut>", lambda event: self.entryLeaveFocus(widget))
+
+    def placeDataBlock(self):
+        if not self.has_data_block:
+            self.has_data_block = True
+            self.data_label.grid(row=3, column=0, sticky="w", pady=3)
+            self.data_entry.grid(row=3, column=1, sticky="w", padx=3, pady=3)
+            self._widget_holder_dict[id(self.data_entry)] = [self._data_for_code, self.data_holder]
+
+    def createDataBlock(self):
+        if not self.has_data_block:
+            self.data_holder = StringVar(value=self._data_for_code)
+
+            self.data_label = Label(self, text="Data: ", bg=self.bg_color)
+            self.data_entry = Entry(self, textvariable=self.data_holder, bd=0, state="disabled")
+            self.bindEntry(self.data_entry)
+            self.placeDataBlock()
+
+    def removeDataBlock(self):
+        if self.has_data_block:
+            self.has_data_block = False
+            self._widget_holder_dict.pop(id(self.data_entry))
+            self.data_label.grid_forget()
+            self.data_entry.grid_forget()
+
     def saveChanges(self):
         if self.frame_changed_holder.get() == 1:
             # if changed something
@@ -93,7 +110,6 @@ class PasswordFrame(Frame):
 
         # feature: when the user clicks on the normal widget when it opened, it have to close
         if isinstance(widget, OptionMenu):
-            # FIXME: if the entry is changed the optionmenu musnt set back the changed status
             if widget_state == "normal":
                 widget.event_generate("<Escape>")
                 self.func_dropdown.config(state="disabled")
@@ -120,7 +136,6 @@ class PasswordFrame(Frame):
                 self.makeCheckButtonAlive()
 
     def getWidgetById(self, widget_id) -> object:
-
         # NOTE: i am lazy af, i know i should use weakref instead of this but tkinter let this method.
         for widget in self.winfo_children():
             if id(widget) == widget_id:
@@ -137,17 +152,29 @@ class PasswordFrame(Frame):
                 widget.config(state="disabled")
                 holder_list[1].set(holder_list[0])
 
-    def entryLeaveFocus(self):
+    def entryLeaveFocus(self, widget):
         if self.frame_changed_holder.get() == 0:
             # if didnt change anything
-            self.reminder_entry.config(state="disabled")
+            widget.config(state="disabled")
     
     def funcCommand(self, choice):
         if choice != self._func_for_code:
             self.makeCheckButtonAlive()
-            print(choice)
+            if choice in self.root_commands.keys():
+                command = self.root_commands[choice]
+                if command is not None:
+                    if callable(command):
+                        # if callable, that means this is a function so it has to have a data block
+                        self.createDataBlock()
+                else:
+                    # this means data block is not longer needed
+                    self.removeDataBlock()
+
         else:
-            self.makeCheckButtonDisabled()
+            if self.reminder_holder.get() == self._reminder:
+                self.makeCheckButtonDisabled()
+
+            self.removeDataBlock() # FIXME: what if the main setup basicly has a data block?
             self.func_dropdown.config(state="disabled")
 
 class PasswordContainerFrame(Frame):
@@ -200,6 +227,18 @@ class UserChooserFrame(Frame):
         else:
             print("This kind of user is not exist")
 
+class CommandPalette:
+    def __init__(self):
+        self._commands = { "do_nothing": None,
+                           "send_notification(ifttt)": self.sendIftttNotification,
+                           "max_use(n)": None}
+
+    def sendIftttNotification(self):
+        print("send ifttt notification")
+
+    def getCommands(self) -> dict:
+        return self._commands
+
 class App(Tk):
     def __init__(self):
         super().__init__()
@@ -212,9 +251,8 @@ class App(Tk):
         self.easydb_obj = easydb.EasyDb(db_conf)
         if not self.easydb_obj.getState(): critical_error(self, "Database failure: {0}".format(*self.easydb_obj.getErrors()))
 
-        self._commands = { "do_nothing": None,
-                           "send_notification(ifttt)": None,
-                           "max_use(n)": None}
+        self.command_palette_obj = CommandPalette()
+        self._commands = self.command_palette_obj.getCommands()
 
         self.user_chooser_frame = UserChooserFrame(self)
         self.user_chooser_frame.pack()
