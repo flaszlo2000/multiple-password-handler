@@ -1,0 +1,9 @@
+{
+    "src": "resources/users_with_multiple_passwords.db",
+    "tables": {
+        "users": "id:INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE;name:TEXT NOT NULL UNIQUE;passwds:TEXT NOT NULL",
+        "password_specials": "passwd_id:INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE;id:INTEGER NOT NULL;passwd_reminder:TEXT NOT NULL;passwd_index:INTEGER NOT NULL;FOREIGN KEY('id') REFERENCES 'users'('id')",
+        "specials": "id:INTEGER NOT NULL;passwd_id:INTEGER NOT NULL;func:TEXT NOT NULL;data:TEXT;FOREIGN KEY('id') REFERENCES 'users'('id');FOREIGN KEY('passwd_id') REFERENCES 'password_specials'('passwd_id')"
+    },
+    "requires_fill": {}
+}
